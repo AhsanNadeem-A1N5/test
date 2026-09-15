@@ -1,41 +1,41 @@
-from app.schemas import Claim, ClaimAnalysis, RiskSignal
+from app.schemas import Claim, ClaimAnalysis, Finding
 
-SUSPICIOUS_TERMS = ("staged", "fake", "altered", "duplicate", "cash only")
-
+SUSPICIOUS_TERMS = {"stolen", "missing", "unknown", "cash", "no receipt", "inconsistent"}
 
 def analyze_claim(claim: Claim) -> ClaimAnalysis:
-    amount = claim.claimed_amount
-    severity = "low" if amount < 7500 else "medium" if amount < 25000 else "high"
-    route = "standard_review" if severity == "low" else "senior_adjuster" if severity == "medium" else "specialist_review"
+    findings = []
+    amount = claim.estimated_loss
+    if amount >= 25000:
+        severity, route = "high", "senior_adjuster"
+    elif amount >= 7500:
+        severity, route = "medium", "adjuster_review"
+    else:
+        severity, route = "low", "standard_review"
 
-    text = f"{claim.description}".lower()
-    signals: list[RiskSignal] = []
-    for term in SUSPICIOUS_TERMS:
-        if term in text:
-            signals.append(RiskSignal(
-                code=f"TERM_{term.upper().replace(' ', '_')}",
-                severity="medium",
-                explanation=f"Claim narrative contains the review signal '{term}'."
-            ))
-
-    if claim.evidence_count == 0:
-        signals.append(RiskSignal(
-            code="NO_EVIDENCE",
-            severity="high",
-            explanation="No supporting evidence has been attached to the claim."
+    text = f"{claim.description} {' '.join(claim.evidence)}".lower()
+    hits = [term for term in SUSPICIOUS_TERMS if term in text]
+    for term in hits:
+        findings.append(Finding(
+            code="RISK_TERM",
+            severity="medium",
+            message=f"Risk signal detected: {term}",
+            evidence_refs=claim.evidence,
         ))
 
-    human_review = severity != "low" or bool(signals)
-    rationale = [
-        f"Claim amount ${amount:,.2f} maps to {severity} severity.",
-        f"Routing policy selected '{route}'.",
-        f"Evidence count: {claim.evidence_count}.",
-    ]
+    if not claim.evidence:
+        findings.append(Finding(
+            code="MISSING_EVIDENCE",
+            severity="high",
+            message="No supporting evidence was attached to the claim.",
+        ))
+
+    risk_score = min(100.0, len(hits) * 15 + (20 if not claim.evidence else 0) + (15 if amount >= 25000 else 0))
+    human_review = bool(findings) or severity == "high"
     return ClaimAnalysis(
         claim_id=claim.id,
         severity=severity,
         route=route,
+        risk_score=risk_score,
         human_review_required=human_review,
-        risk_signals=signals,
-        rationale=rationale,
+        findings=findings,
     )

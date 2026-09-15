@@ -1,22 +1,26 @@
+from typing import Dict, List
 from pydantic import BaseModel, Field
 
 class Claim(BaseModel):
-    id: str = Field(min_length=1)
-    claimant_name: str = Field(min_length=1)
-    claim_type: str = Field(min_length=1)
-    description: str = Field(min_length=1)
-    claimed_amount: float = Field(ge=0)
-    evidence_count: int = Field(default=0, ge=0)
+    id: str
+    policy_id: str
+    claimant: str
+    claim_type: str
+    description: str
+    estimated_loss: float = Field(ge=0)
+    location: str | None = None
+    evidence: List[str] = []
 
-class RiskSignal(BaseModel):
+class Finding(BaseModel):
     code: str
     severity: str
-    explanation: str
+    message: str
+    evidence_refs: List[str] = []
 
 class ClaimAnalysis(BaseModel):
     claim_id: str
     severity: str
     route: str
+    risk_score: float
     human_review_required: bool
-    risk_signals: list[RiskSignal]
-    rationale: list[str]
+    findings: List[Finding]

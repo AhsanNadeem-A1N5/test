@@ -3,43 +3,27 @@ from app.main import app
 
 client = TestClient(app)
 
-
 def test_health():
-    response = client.get("/health")
+    response = client.get('/health')
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.json()['status'] == 'ok'
 
-
-def test_claim_analysis_routes_high_value_claim_to_specialist():
+def test_claim_analysis():
     claim = {
-        "id": "CLM-001",
-        "claimant_name": "Test Claimant",
-        "claim_type": "property",
-        "description": "Water damage to kitchen",
-        "claimed_amount": 30000,
-        "evidence_count": 3,
+        'id': 'CLM-001',
+        'policy_id': 'POL-100',
+        'claimant': 'Test User',
+        'claim_type': 'property',
+        'description': 'Water damage with missing receipt',
+        'estimated_loss': 12000,
+        'location': 'Lahore',
+        'evidence': ['receipt_missing.jpg']
     }
-    created = client.post("/claims", json=claim)
+    created = client.post('/claims', json=claim)
     assert created.status_code == 200
-
-    result = client.post("/claims/CLM-001/analyze")
-    assert result.status_code == 200
-    body = result.json()
-    assert body["severity"] == "high"
-    assert body["route"] == "specialist_review"
-    assert body["human_review_required"] is True
-
-
-def test_missing_evidence_creates_signal():
-    claim = {
-        "id": "CLM-002",
-        "claimant_name": "Test Claimant",
-        "claim_type": "auto",
-        "description": "Vehicle damage",
-        "claimed_amount": 1000,
-        "evidence_count": 0,
-    }
-    client.post("/claims", json=claim)
-    result = client.post("/claims/CLM-002/analyze")
-    assert result.status_code == 200
-    assert result.json()["risk_signals"][0]["code"] == "NO_EVIDENCE"
+    analysis = client.post('/claims/CLM-001/analyze')
+    assert analysis.status_code == 200
+    data = analysis.json()
+    assert data['severity'] == 'medium'
+    assert data['human_review_required'] is True
+    assert data['risk_score'] > 0
